@@ -81,7 +81,7 @@ private fun FireControlApp(coordinator: InterventionCoordinator, relay: AlertRel
                         colors = ButtonDefaults.buttonColors(containerColor = FireRed, contentColor = Color.White),
                         shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(54.dp)
                     ) { Text("ARRÊT D’URGENCE", fontWeight = FontWeight.Black, letterSpacing = 1.sp) }
-                    Text("L’arrêt d’urgence ne remplace pas l’arrêt physique du camion.", color = Muted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
+                    Text("Si le camion ne répond pas, utilisez son arrêt physique.", color = Muted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 5.dp))
                 }
             }
         }
@@ -225,13 +225,9 @@ private fun FirefighterDashboard(
                 ActionButton("Se connecter au centre", adminAddress.isNotBlank()) { relay.connectToAdmin(adminAddress, onStatus, onAlert) }
                 Text("Les deux téléphones doivent être sur le même Wi‑Fi. Laissez cette application ouverte pendant la démonstration.", color = Muted, fontSize = 12.sp)
             }
-            SectionCard("Prêt au départ") {
-                StatusLine("Camion", state.connections[BoardRole.truck]?.label ?: "Connexion…")
-                StatusLine("Scène incendie", state.connections[BoardRole.house]?.label ?: "Connexion…")
-                Text("Le réservoir se remplit manuellement avant la démonstration. Aucun niveau d’eau n’est mesuré.", color = Muted, fontSize = 12.sp)
-            }
+            Text("Le réservoir doit être rempli avant le départ.", color = Muted, fontSize = 12.sp)
         }
-        Phase.STARTING -> HeroCard("ALERTE REÇUE", "Préparation de l’intervention", "Activation du feu simulé et des équipements de la scène…", FireRed) { StatusLine("État", "Confirmation des cartes en cours") }
+        Phase.STARTING -> HeroCard("ALERTE REÇUE", "Préparation de l’intervention", "Le centre prépare la scène. Restez prêt à répondre à l’appel.", FireRed) { }
         Phase.INCOMING_CALL -> IncomingCallScreen(state, coordinator)
         Phase.BRIEFING -> HeroCard("CENTRE D’ALERTE", "ALERTE INCENDIE !", "Un incendie vient d’être détecté. Intervention nécessaire immédiatement.", FireRed) {
             Text("Unité demandée : camion de pompiers", color = Muted)
@@ -241,15 +237,12 @@ private fun FirefighterDashboard(
         Phase.DEPARTURE -> DepartureScreen(state, coordinator)
         Phase.TRAVELLING -> DrivingScreen(state, coordinator)
         Phase.INTERVENTION -> PumpScreen(state, coordinator, angle, onAngle)
-        Phase.EXTINGUISHING -> HeroCard("INTERVENTION", "Arrêt des équipements", "La pompe, les LED et le ventilateur s’arrêtent. Confirmation en cours…", FireRed) { StatusLine("État des cartes", if (state.ready) "En attente des confirmations" else "Sortie inconnue") }
-        Phase.EXTINGUISHED -> HeroCard("SCÈNE SÉCURISÉE", "Feu simulé éteint", "La pompe et les équipements du faux feu sont confirmés à l’arrêt.", SignalLime) {
-            StatusLine("Gyrophare", output(state.boards[BoardRole.truck]?.beaconEnabled))
+        Phase.EXTINGUISHING -> HeroCard("INTERVENTION", "Extinction en cours", "La pompe et le feu simulé sont en cours d’arrêt. Patientez…", FireRed) { }
+        Phase.EXTINGUISHED -> HeroCard("SCÈNE SÉCURISÉE", "Feu éteint", "Le feu simulé est éteint. Vous pouvez terminer l’intervention.", SignalLime) {
             Button(onClick = coordinator::finish, colors = ButtonDefaults.buttonColors(containerColor = SignalLime, contentColor = Ink), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("TERMINER L’INTERVENTION", fontWeight = FontWeight.Black) }
         }
-        Phase.FINISHING -> HeroCard("RETOUR AU CALME", "Fin de l’intervention", "Arrêt du gyrophare et vérification finale des équipements…", SignalLime) { StatusLine("Confirmation", "En attente des cartes") }
-        Phase.FINISHED -> HeroCard("MISSION ACCOMPLIE", "Intervention terminée", "Tous les équipements sont confirmés à l’arrêt. Vous pouvez préparer un nouveau départ.", SignalLime) {
-            StatusLine("Pompe", output(state.boards[BoardRole.truck]?.pumpEnabled))
-            StatusLine("Gyrophare", output(state.boards[BoardRole.truck]?.beaconEnabled))
+        Phase.FINISHING -> HeroCard("RETOUR AU CALME", "Fin de l’intervention", "Le gyrophare s’éteint. Patientez…", SignalLime) { }
+        Phase.FINISHED -> HeroCard("MISSION ACCOMPLIE", "Intervention terminée", "La scène est sécurisée. Vous pouvez retourner en garde.", SignalLime) {
             ActionButton("Retour en garde", state.ready && state.records.none { it.status == CommandRecord.Status.PENDING }, coordinator::newIntervention)
         }
     }
@@ -271,9 +264,7 @@ private fun IncomingCallScreen(state: AppState, coordinator: InterventionCoordin
 
 @Composable
 private fun DepartureScreen(state: AppState, coordinator: InterventionCoordinator) {
-    HeroCard("DÉPART ACCEPTÉ", "Équipe, en route !", "Gyrophare et sirène activés. Prenez le contrôle du camion et confirmez le départ.", SignalLime) {
-        StatusLine("Gyrophare", output(state.boards[BoardRole.truck]?.beaconEnabled))
-        StatusLine("Sirène", output(state.boards[BoardRole.truck]?.sirenEnabled))
+    HeroCard("DÉPART ACCEPTÉ", "Équipe, en route !", "Prenez le contrôle du camion et confirmez le départ.", SignalLime) {
         Button(onClick = coordinator::confirmDeparture, enabled = state.controls && state.boards[BoardRole.truck]?.let { it.beaconEnabled == true && it.sirenEnabled == true } == true, colors = ButtonDefaults.buttonColors(containerColor = SignalLime, contentColor = Ink), modifier = Modifier.fillMaxWidth().height(58.dp)) { Text("CONFIRMER LE DÉPART", fontWeight = FontWeight.Black) }
     }
     RouteProgress(current = 1)
@@ -311,10 +302,7 @@ private fun DriveButton(label: String, direction: String, state: AppState, coord
 
 @Composable
 private fun PumpScreen(state: AppState, coordinator: InterventionCoordinator, angle: Float, onAngle: (Float) -> Unit) {
-    HeroCard("SUR LES LIEUX", "Protégez la maison", "Le camion est arrivé. Le gyrophare reste allumé; arrêtez le véhicule puis orientez la lance.", FireRed) {
-        StatusLine("Présence sur zone", if (state.onScene) "Détectée" else "Non détectée")
-        StatusLine("Gyrophare", output(state.boards[BoardRole.truck]?.beaconEnabled))
-        StatusLine("Pompe", output(state.boards[BoardRole.truck]?.pumpEnabled))
+    HeroCard("SUR LES LIEUX", "Protégez la maison", "Le camion est arrivé. Orientez la lance puis activez la pompe.", FireRed) {
         if (state.validRange) {
             Text("Orientation de la lance · ${angle.toInt()}°", color = Muted)
             Slider(value = angle.coerceIn(state.nozzleMinimum, state.nozzleMaximum), onValueChange = onAngle, valueRange = state.nozzleMinimum..state.nozzleMaximum, enabled = state.canAim)
@@ -323,7 +311,7 @@ private fun PumpScreen(state: AppState, coordinator: InterventionCoordinator, an
         Button(onClick = { coordinator.setPump(state.boards[BoardRole.truck]?.pumpEnabled != true) }, enabled = state.canPump || (state.connections[BoardRole.truck] == Connection.READY && state.boards[BoardRole.truck]?.pumpEnabled == true && !state.emergencyLocked), colors = ButtonDefaults.buttonColors(containerColor = if (state.boards[BoardRole.truck]?.pumpEnabled == true) PanelRaised else FireRed), modifier = Modifier.fillMaxWidth().height(58.dp)) {
             Text(if (state.boards[BoardRole.truck]?.pumpEnabled == true) "ARRÊTER LA POMPE" else "ACTIVER LA POMPE À EAU", fontWeight = FontWeight.Black)
         }
-        Text("La pompe peut être arrêtée et redémarrée. L’extinction reste une confirmation manuelle.", color = Muted, fontSize = 12.sp)
+        Text("Arrêtez la pompe lorsque l’incendie vous semble maîtrisé, puis confirmez l’extinction.", color = Muted, fontSize = 12.sp)
         Button(onClick = coordinator::confirmExtinction, enabled = state.canConfirmExtinction, colors = ButtonDefaults.buttonColors(containerColor = SignalLime, contentColor = Ink), modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("CONFIRMER L’EXTINCTION", fontWeight = FontWeight.Black) }
     }
 }
@@ -343,8 +331,8 @@ private fun RouteProgress(current: Int) {
 
 @Composable
 private fun EmergencyLockedCard(state: AppState, coordinator: InterventionCoordinator) {
-    SectionCard("ARRÊT D’URGENCE · COMMANDES VERROUILLÉES") {
-        Text(state.message, color = Color.White)
+    SectionCard("Arrêt d’urgence") {
+        Text("Les commandes sont verrouillées. Réarmez pour reprendre le scénario.", color = Color.White)
         ActionButton("Réessayer les arrêts", true, coordinator::emergencyStop)
         val canRearm = state.ready && state.records.none { it.status == CommandRecord.Status.PENDING } && BoardRole.entries.all { state.boards[it]?.allStopped(it) == true }
         ActionButton("Réarmer", canRearm, coordinator::rearm)
